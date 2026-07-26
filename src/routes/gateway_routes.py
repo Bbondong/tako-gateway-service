@@ -1,13 +1,14 @@
 from flask import Blueprint, jsonify, request
 import requests
+import os
 
 gateway_bp = Blueprint("gateway", __name__)
 
 # Configuration des services (peut être déplacé vers un fichier de config ou des variables d'environnement)
 SERVICE_URLS = {
-    "auth": "http://localhost:5001", # URL du service d'authentification
-    "transactions": "http://localhost:5002", # URL du service de transactions
-    "payment": "http://localhost:5003" # URL du service de paiement
+    "auth": os.getenv("AUTH_SERVICE_URL", "http://localhost:5001"),
+    "transactions": os.getenv("TRANSACTIONS_SERVICE_URL", "http://localhost:5002"),
+    "payment": os.getenv("PAYMENT_SERVICE_URL", "http://localhost:5003")
 }
 
 def proxy_request(service_name, path):
