@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 Mo max
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 5 Mo max
 
 # --- RATE LIMITING & BRUTE-FORCE ---
 RATE_LIMIT = 50
