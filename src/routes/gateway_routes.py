@@ -1,6 +1,6 @@
 import os
 import requests
-from flask import Blueprint, jsonify, request, redirect  # Importation de redirect
+from flask import Blueprint, jsonify, request, redirect
 from securite.securite import verify_request_security
 
 gateway_bp = Blueprint("gateway", __name__)
@@ -39,8 +39,20 @@ def proxy_request(service_name, path):
     headers["X-Internal-Key"] = INTERNAL_API_KEY  # Clé serveur-à-serveur
 
     try:
-        data = request.get_data() if not request.files else None
-        files = {key: (f.filename, f.stream, f.content_type) for key, f in request.files.items()} if request.files else None
+        # GESTION DES DONNÉES : Distinguer le JSON des Formulaires (Fichiers + Textes)
+        if request.files or request.form:
+            # C'est un formulaire (avec ou sans fichiers)
+            # On récupère tous les champs textes (tel, password, nom, etc.)
+            data = request.form.to_dict()  
+            files = {key: (f.filename, f.stream, f.content_type) for key, f in request.files.items()} if request.files else None
+            
+            # TRÈS IMPORTANT : On supprime le Content-Type d'origine. 
+            # 'requests' va en générer un nouveau avec un "boundary" valide pour les fichiers.
+            headers = {k: v for k, v in headers.items() if k.lower() != 'content-type'}
+        else:
+            # C'est une requête classique (ex: JSON pur)
+            data = request.get_data()
+            files = None
 
         resp = requests.request(
             method=request.method,
