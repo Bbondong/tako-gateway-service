@@ -84,3 +84,8 @@ Versioned account endpoints verify bearer JWT in the auth service. Do not embed
 that legacy key requirement. Set `TAKO_WEB_ORIGINS` to a comma-separated list
 of allowed browser origins if using Flutter Web. The gateway and auth service
 must be deployed together for the versioned routes to work.
+
+The `/api/v1` proxy also forwards driver login, acceptance and location
+updates. Position updates send and receive once every five seconds per active
+participant. Versioned bearer requests are rate-limited per token so clients
+behind one mobile NAT do not consume each other's quota.

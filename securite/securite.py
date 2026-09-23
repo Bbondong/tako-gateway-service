@@ -2,6 +2,7 @@ import os
 import re
 import time
 import logging
+import hashlib
 from flask import request, jsonify
 from werkzeug.utils import secure_filename
 
@@ -81,19 +82,24 @@ def verify_request_security():
     # 3. RATE LIMITING (BRUTE-FORCE)
     # ---------------------------------------------------------
     current_time = time.time()
-    if client_ip not in ip_requests:
-        ip_requests[client_ip] = []
+    bearer = request.headers.get('Authorization', '')
+    rate_key = client_ip
+    if request.path.startswith('/api/v1/') and bearer.startswith('Bearer '):
+        # Users behind a shared mobile NAT must not exhaust one another's quota.
+        rate_key += ':' + hashlib.sha256(bearer.encode()).hexdigest()
+    if rate_key not in ip_requests:
+        ip_requests[rate_key] = []
 
-    ip_requests[client_ip] = [t for t in ip_requests[client_ip] if current_time - t < RATE_LIMIT_WINDOW]
+    ip_requests[rate_key] = [t for t in ip_requests[rate_key] if current_time - t < RATE_LIMIT_WINDOW]
 
-    if len(ip_requests[client_ip]) >= RATE_LIMIT:
+    if len(ip_requests[rate_key]) >= RATE_LIMIT:
         logger.warning(f"[RATE LIMIT] Brute-force détecté pour l'IP {client_ip}")
         register_infraction(client_ip)
         ban_level = ip_bans[client_ip]['level']
         ban_minutes = BAN_STAGES[ban_level] // 60
         return jsonify({"error": f"Brute-force/Bot détecté. IP bloquée {ban_minutes} minute(s)."}), 429
 
-    ip_requests[client_ip].append(current_time)
+    ip_requests[rate_key].append(current_time)
 
     # ---------------------------------------------------------
     # 4. PARE-FEU WAF (Injections SQL & Scripts)
