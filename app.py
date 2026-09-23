@@ -16,6 +16,13 @@ app.register_blueprint(gateway_bp)
 # 3. Injection des Headers de Sécurité HTTP (Protection du navigateur)
 @app.after_request
 def add_security_headers(response):
+    allowed_origins = {v.strip() for v in os.getenv('TAKO_WEB_ORIGINS', '').split(',') if v.strip()}
+    origin = __import__('flask').request.headers.get('Origin')
+    if origin in allowed_origins:
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Vary'] = 'Origin'
+        response.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"

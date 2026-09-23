@@ -58,17 +58,12 @@ def verify_request_security():
     # On récupère la clé dynamique pour s'assurer qu'elle est bien chargée (utile si on utilise dotenv)
     expected_key = os.environ.get("TAKO_CLIENT_API_KEY")
 
-    # --- LOGS DE DÉBOGAGE ---
-    logger.info(f"Requête reçue de l'IP : {client_ip} sur la route : {request.path}")
-    logger.info(f"Clé envoyée par le Client (cURL) : '{client_key}'")
-    logger.info(f"Clé attendue par le Serveur (ENV)  : '{expected_key}'")
-
-    if not client_key or client_key != expected_key:
-        logger.error(f"[BLOCAGE] Clé API invalide ou manquante. Accès refusé.")
-        register_infraction(client_ip)
-        return jsonify({"error": "Accès non autorisé. Clé API client manquante ou invalide."}), 401
-
-    logger.info(f"[SUCCÈS] Clé API valide. Validation de sécurité en cours...")
+    # Legacy routes retain the old client key. The public versioned API uses JWT
+    # on account-scoped endpoints; a key embedded in Flutter cannot remain secret.
+    if not request.path.startswith('/api/v1/'):
+        if not client_key or not expected_key or client_key != expected_key:
+            register_infraction(client_ip)
+            return jsonify({"error": "Clé API client manquante ou invalide."}), 401
 
     # ---------------------------------------------------------
     # 2. VÉRIFICATION BANNISSEMENT IP (BRUTE-FORCE & ROBOTS)
