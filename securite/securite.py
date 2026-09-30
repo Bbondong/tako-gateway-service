@@ -118,6 +118,10 @@ def verify_request_security():
     if request.is_json:
         try:
             json_payload = request.get_json(silent=True)
+            # Firebase ID token signatures are opaque base64url (may include --).
+            # The auth service validates this field cryptographically; scan names.
+            if request.path == '/api/v1/auth/firebase-login' and isinstance(json_payload, dict):
+                json_payload = {key: value for key, value in json_payload.items() if key != 'id_token'}
             if json_payload and check_payload(str(json_payload)):
                 return jsonify({"error": "Payload JSON suspect."}), 400
         except Exception:
