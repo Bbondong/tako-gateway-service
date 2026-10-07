@@ -8,7 +8,8 @@ gateway_bp = Blueprint("gateway", __name__)
 SERVICE_URLS = {
     "auth": os.getenv("AUTH_SERVICE_URL"),
     "transactions": os.getenv("TRANSACTIONS_SERVICE_URL"),
-    "payment": os.getenv("PAYMENT_SERVICE_URL")
+    "payment": os.getenv("PAYMENT_SERVICE_URL"),
+    "client": os.getenv("AUTH_SERVICE_URL")
 }
 
 # Clé secrète uniquement partagée entre le Gateway et les Microservices
@@ -18,7 +19,7 @@ INTERNAL_API_KEY = os.getenv("TAKO_API_KEY_INTER_SERVICES")
 @gateway_bp.before_request
 def apply_security_filter():
     # Exemption de la racine "/" pour permettre la redirection sans exiger de clé client
-    if request.path == "/":
+    if request.method == "OPTIONS" or request.path == "/":
         return None
 
     # Vérifie la clé client, l'IP, le brute-force et les injections SQL pour toutes les autres routes
@@ -36,6 +37,8 @@ def proxy_request(service_name, path):
 
     # Copie des entêtes + Nettoyage de la clé client + Injection de la clé interne
     headers = {key: value for (key, value) in request.headers if key.lower() not in ['host', 'x-client-key']}
+    if not INTERNAL_API_KEY:
+        return jsonify({"message": "Clé interne du gateway non configurée."}), 503
     headers["X-Internal-Key"] = INTERNAL_API_KEY  # Clé serveur-à-serveur
 
     try:
@@ -62,7 +65,8 @@ def proxy_request(service_name, path):
             data=data,
             files=files,
             cookies=request.cookies,
-            allow_redirects=False
+            allow_redirects=False,
+            timeout=15
         )
 
         excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
@@ -94,21 +98,7 @@ def transactions_proxy(path):
 def payment_proxy(path):
     return proxy_request("payment", path)
 
-# Inscription / connexion client par code WhatsApp (liste blanche des actions exposées)
-OTP_ACTIONS = {"register", "request", "verify-code", "verify"}
 
-@gateway_bp.route("/api/v1/auth/otp/<action>", methods=["POST"])
-def client_otp_proxy(action):
-    if action not in OTP_ACTIONS:
-        return jsonify({"error": "Route introuvable."}), 404
-    return proxy_request("auth", f"api/v1/auth/otp/{action}")
-
-
-# Lieux favoris du client (le JWT Authorization est transmis tel quel au service d'auth)
-@gateway_bp.route("/api/v1/favorites", methods=["GET", "POST"])
-def favorites_proxy():
-    return proxy_request("auth", "api/v1/favorites")
-
-@gateway_bp.route("/api/v1/favorites/<int:favorite_id>", methods=["DELETE"])
-def favorite_delete_proxy(favorite_id):
-    return proxy_request("auth", f"api/v1/favorites/{favorite_id}")
+@gateway_bp.route('/api/v1/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def client_api_proxy(path):
+    return proxy_request('client', f'api/v1/{path}')

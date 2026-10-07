@@ -2,6 +2,7 @@ import os
 import re
 import time
 import logging
+import hashlib
 from flask import request, jsonify
 from werkzeug.utils import secure_filename
 
@@ -58,17 +59,12 @@ def verify_request_security():
     # On récupère la clé dynamique pour s'assurer qu'elle est bien chargée (utile si on utilise dotenv)
     expected_key = os.environ.get("TAKO_CLIENT_API_KEY")
 
-    # --- LOGS DE DÉBOGAGE ---
-    logger.info(f"Requête reçue de l'IP : {client_ip} sur la route : {request.path}")
-    logger.info(f"Clé envoyée par le Client (cURL) : '{client_key}'")
-    logger.info(f"Clé attendue par le Serveur (ENV)  : '{expected_key}'")
-
-    if not client_key or client_key != expected_key:
-        logger.error(f"[BLOCAGE] Clé API invalide ou manquante. Accès refusé.")
-        register_infraction(client_ip)
-        return jsonify({"error": "Accès non autorisé. Clé API client manquante ou invalide."}), 401
-
-    logger.info(f"[SUCCÈS] Clé API valide. Validation de sécurité en cours...")
+    # Legacy routes retain the old client key. The public versioned API uses JWT
+    # on account-scoped endpoints; a key embedded in Flutter cannot remain secret.
+    if not request.path.startswith('/api/v1/'):
+        if not client_key or not expected_key or client_key != expected_key:
+            register_infraction(client_ip)
+            return jsonify({"error": "Clé API client manquante ou invalide."}), 401
 
     # ---------------------------------------------------------
     # 2. VÉRIFICATION BANNISSEMENT IP (BRUTE-FORCE & ROBOTS)
@@ -86,19 +82,24 @@ def verify_request_security():
     # 3. RATE LIMITING (BRUTE-FORCE)
     # ---------------------------------------------------------
     current_time = time.time()
-    if client_ip not in ip_requests:
-        ip_requests[client_ip] = []
+    bearer = request.headers.get('Authorization', '')
+    rate_key = client_ip
+    if request.path.startswith('/api/v1/') and bearer.startswith('Bearer '):
+        # Users behind a shared mobile NAT must not exhaust one another's quota.
+        rate_key += ':' + hashlib.sha256(bearer.encode()).hexdigest()
+    if rate_key not in ip_requests:
+        ip_requests[rate_key] = []
 
-    ip_requests[client_ip] = [t for t in ip_requests[client_ip] if current_time - t < RATE_LIMIT_WINDOW]
+    ip_requests[rate_key] = [t for t in ip_requests[rate_key] if current_time - t < RATE_LIMIT_WINDOW]
 
-    if len(ip_requests[client_ip]) >= RATE_LIMIT:
+    if len(ip_requests[rate_key]) >= RATE_LIMIT:
         logger.warning(f"[RATE LIMIT] Brute-force détecté pour l'IP {client_ip}")
         register_infraction(client_ip)
         ban_level = ip_bans[client_ip]['level']
         ban_minutes = BAN_STAGES[ban_level] // 60
         return jsonify({"error": f"Brute-force/Bot détecté. IP bloquée {ban_minutes} minute(s)."}), 429
 
-    ip_requests[client_ip].append(current_time)
+    ip_requests[rate_key].append(current_time)
 
     # ---------------------------------------------------------
     # 4. PARE-FEU WAF (Injections SQL & Scripts)
