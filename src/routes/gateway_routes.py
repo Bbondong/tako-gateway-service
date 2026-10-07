@@ -93,3 +93,22 @@ def transactions_proxy(path):
 @gateway_bp.route("/payment/<path:path>", methods=["GET", "POST", "PUT", "DELETE"])
 def payment_proxy(path):
     return proxy_request("payment", path)
+
+# Inscription / connexion client par code WhatsApp (liste blanche des actions exposées)
+OTP_ACTIONS = {"register", "request", "verify-code", "verify"}
+
+@gateway_bp.route("/api/v1/auth/otp/<action>", methods=["POST"])
+def client_otp_proxy(action):
+    if action not in OTP_ACTIONS:
+        return jsonify({"error": "Route introuvable."}), 404
+    return proxy_request("auth", f"api/v1/auth/otp/{action}")
+
+
+# Lieux favoris du client (le JWT Authorization est transmis tel quel au service d'auth)
+@gateway_bp.route("/api/v1/favorites", methods=["GET", "POST"])
+def favorites_proxy():
+    return proxy_request("auth", "api/v1/favorites")
+
+@gateway_bp.route("/api/v1/favorites/<int:favorite_id>", methods=["DELETE"])
+def favorite_delete_proxy(favorite_id):
+    return proxy_request("auth", f"api/v1/favorites/{favorite_id}")
