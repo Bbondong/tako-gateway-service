@@ -84,8 +84,9 @@ def verify_request_security():
     current_time = time.time()
     bearer = request.headers.get('Authorization', '')
     rate_key = client_ip
-    if request.path.startswith('/api/v1/') and bearer.startswith('Bearer '):
-        # Users behind a shared mobile NAT must not exhaust one another's quota.
+    if request.path.startswith(('/api/v1/', '/transactions/')) and bearer.startswith('Bearer '):
+        # Users behind a shared mobile NAT must not exhaust one another's quota
+        # (course tracking polls /transactions/ every few seconds).
         rate_key += ':' + hashlib.sha256(bearer.encode()).hexdigest()
     if rate_key not in ip_requests:
         ip_requests[rate_key] = []
