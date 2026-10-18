@@ -1,3 +1,4 @@
 
 # environnement virtuel local
 /.venv
+.env
